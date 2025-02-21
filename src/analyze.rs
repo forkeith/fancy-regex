@@ -200,6 +200,12 @@ impl<'a> Analyzer<'a> {
                 children.push(child_info_truth);
                 children.push(child_info_false);
             }
+            Expr::SubroutineCall(group) => {
+                if group >= self.group_ix {
+                    return Err(Error::CompileError(CompileError::InvalidBackref));
+                }
+                hard = true;
+            }
         };
 
         Ok(Info {

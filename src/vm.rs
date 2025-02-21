@@ -191,6 +191,8 @@ pub enum Insn {
     ContinueFromPreviousMatchEnd,
     /// Continue only if the specified capture group has already been populated as part of the match
     BackrefExistsCondition(usize),
+    /// Subroutine
+    SubroutineCall(usize),
 }
 
 /// Sequence of instructions for the VM to execute.
@@ -699,6 +701,16 @@ pub(crate) fn run(
                         break 'fail;
                     }
                 }
+                Insn::SubroutineCall(group) => {
+                   let start = state.get(group * 2);
+                   let end = state.get(group * 2 + 1);
+                   if start == usize::MAX || end == usize::MAX {
+                       break 'fail;
+                   }
+                   state.push(pc + 1, ix)?;
+                   pc = start;
+                   ix = end;
+               }
             }
             pc += 1;
         }

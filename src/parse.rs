@@ -291,6 +291,7 @@ impl<'a> Parser<'a> {
         open: &str,
         close: &str,
         allow_relative: bool,
+        is_subroutine_call: bool,
     ) -> Result<(usize, Expr)> {
         if let Some((id, skip)) = parse_id(&self.re[ix..], open, close, allow_relative) {
             let group = if let Some(group) = self.named_groups.get(id) {
@@ -307,7 +308,7 @@ impl<'a> Parser<'a> {
                 None
             };
             if let Some(group) = group {
-                return Ok((ix + skip, Expr::Backref(group)));
+                return Ok((ix + skip, if is_subroutine_call { Expr::SubroutineCall(group) } else { Expr::Backref(group) }));
             }
             // here the name is parsed but it is invalid
             Err(Error::ParseError(
@@ -343,9 +344,9 @@ impl<'a> Parser<'a> {
         } else if matches!(b, b'k') && !in_class {
             // Named backref: \k<name>
             if bytes.get(end) == Some(&b'\'') {
-                return self.parse_named_backref(end, "'", "'", true);
+                return self.parse_named_backref(end, "'", "'", true, false);
             } else {
-                return self.parse_named_backref(end, "<", ">", true);
+                return self.parse_named_backref(end, "<", ">", true, false);
             }
         } else if b == b'A' && !in_class {
             (end, Expr::Assertion(Assertion::StartText))
@@ -443,6 +444,20 @@ impl<'a> Parser<'a> {
             (end, Expr::KeepOut)
         } else if b == b'G' && !in_class {
             (end, Expr::ContinueFromPreviousMatchEnd)
+        } else if b == b'g' && !in_class {
+            let end = end + 1;
+            let b = bytes[end]; // TODO: check not end of input
+            if is_digit(b) {
+                if let Some((end, group)) = parse_decimal(self.re, end) {
+                    (end, Expr::SubroutineCall(group))
+                } else {
+                    return Err(Error::ParseError(ix, ParseError::InvalidEscape("\\g".to_string())));
+                }
+            } else if b == b'\'' {
+                self.parse_named_backref(end, "'", "'", true, true)?
+            } else {
+                self.parse_named_backref(end, "<", ">", true, true)?
+            }
         } else {
             // printable ASCII (including space, see issue #29)
             (
@@ -633,11 +648,13 @@ impl<'a> Parser<'a> {
             }
         } else if self.re[ix..].starts_with("?P=") {
             // Backref using Python syntax: (?P=name)
-            return self.parse_named_backref(ix + 3, "", ")", false);
+            return self.parse_named_backref(ix + 3, "", ")", false, false);
         } else if self.re[ix..].starts_with("?>") {
             (None, 2)
         } else if self.re[ix..].starts_with("?(") {
             return self.parse_conditional(ix + 2, depth);
+        } else if self.re[ix..].starts_with("?P>") {
+            return self.parse_named_backref(ix + 3, "", ")", false, true);
         } else if self.re[ix..].starts_with('?') {
             return self.parse_flags(ix, depth);
         } else {
@@ -744,9 +761,9 @@ impl<'a> Parser<'a> {
         let (mut next, condition) = if is_digit(b) {
             self.parse_numbered_backref(ix)?
         } else if b == b'\'' {
-            self.parse_named_backref(ix, "'", "'", true)?
+            self.parse_named_backref(ix, "'", "'", true, false)?
         } else if b == b'<' {
-            self.parse_named_backref(ix, "<", ">", true)?
+            self.parse_named_backref(ix, "<", ">", true, false)?
         } else {
             self.parse_re(ix, depth)?
         };
