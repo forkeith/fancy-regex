@@ -1,6 +1,6 @@
 mod common;
 
-use fancy_regex::{Match, Regex};
+use fancy_regex::{Match, Regex, Error};
 use std::ops::Range;
 
 #[test]
@@ -281,6 +281,23 @@ fn find_conditional() {
 #[test]
 fn find_endtext_before_newlines() {
     assert_eq!(find(r"\Z", "hello\nworld\n\n\n"), Some((11, 11)));
+}
+
+#[test]
+fn find_iter_alternation_at_beginning_of_regex() {
+    // https://github.com/rust-lang/regex/issues/779
+    let text = "a\naaa\n";
+
+    let automata_results: Result<Vec<Match>, Error> = common::regex(r"(?m)(^|a)+").find_iter(text).collect();
+    let plus_results: Result<Vec<Match>, Error> = common::regex(r"(?m)(^|a)+(?!ignore)").find_iter(text).collect();
+    let star_results: Result<Vec<Match>, Error> = common::regex(r"(?m)(^|a)(^|a)*(?!ignore)").find_iter(text).collect();
+    let plus_matches = plus_results.unwrap();
+    let star_matches = star_results.unwrap();
+    
+    assert_eq!(star_matches, automata_results.unwrap());
+    assert_eq!(star_matches, plus_matches);
+    
+    assert_eq!(plus_matches.len(), 6);
 }
 
 fn find(re: &str, text: &str) -> Option<(usize, usize)> {
