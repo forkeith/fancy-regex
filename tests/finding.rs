@@ -281,6 +281,7 @@ fn find_conditional() {
 #[test]
 fn find_endtext_before_newlines() {
     assert_eq!(find(r"\Z", "hello\nworld\n\n\n"), Some((11, 11)));
+    assert_eq!(find(r"(?m)\w+\Z", "hello\nworld\n\n\n"), Some((6, 11)));
 }
 
 fn find(re: &str, text: &str) -> Option<(usize, usize)> {

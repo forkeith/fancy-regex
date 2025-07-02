@@ -46,6 +46,17 @@ test";
 }
 
 #[test]
+fn check_multi_line_option_does_not_affect_slash_z() {
+    let test_text = r"test
+foo
+
+";
+
+    let regex = build_regex(RegexBuilder::new(r"test\Z").multi_line(true));
+    assert!(!regex.is_match(test_text).unwrap_or_default());
+}
+
+#[test]
 fn check_ignore_whitespace_option() {
     let regex = build_regex(RegexBuilder::new(r"test    foo").ignore_whitespace(true));
 
