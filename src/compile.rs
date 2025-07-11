@@ -470,7 +470,7 @@ impl Compiler {
             return Ok(());
         }
 
-        let mut delegate_builder = DelegateBuilder::new(!self.first_delegate_emitted);
+        let mut delegate_builder = DelegateBuilder::new(self.first_delegate_emitted);
         for info in infos {
             delegate_builder.push(info);
         }
@@ -488,7 +488,7 @@ impl Compiler {
             info.push_literal(&mut val);
             Insn::Lit(val)
         } else {
-            DelegateBuilder::new(!self.first_delegate_emitted).push(info).build(&self.options)?
+            DelegateBuilder::new(self.first_delegate_emitted).push(info).build(&self.options)?
         };
         self.b.add(insn);
         self.first_delegate_emitted = true;

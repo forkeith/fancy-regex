@@ -749,7 +749,7 @@ pub(crate) fn run(
                     anchored,
                 }) => {
                     let input = Input::new(s).span(ix..s.len()).anchored(if anchored { Anchored::Yes } else { Anchored::No });
-                    if start_group == end_group {
+                    if start_group == end_group && anchored {
                         // No groups, so we can use faster methods
                         match inner.search_half(&input) {
                             Some(m) => ix = m.offset(),
@@ -768,6 +768,9 @@ pub(crate) fn run(
                                     state.save(slot, usize::MAX);
                                     state.save(slot + 1, usize::MAX);
                                 }
+                            }
+                            if !anchored {
+                                state.save(0, inner_slots[0].unwrap().get());
                             }
                             ix = inner_slots[1].unwrap().get();
                         } else {

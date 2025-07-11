@@ -246,18 +246,14 @@ digraph G {
     fn test_compilation_fancy_debug_output() {
         let expected = "  ".to_owned()
             + "\
-  0: Split(3, 1)
-  1: Any
-  2: Jmp(0)
-  3: Save(0)
-  4: Lit(\"a\")
-  5: Split(4, 6)
-  6: Save(2)
-  7: Split(8, 10)
-  8: Lit(\"b\")
-  9: Jmp(7)
- 10: Save(3)
- 11: Save(4)
+  1: Lit(\"a\")
+  2: Split(4, 6)
+  3: Save(2)
+  4: Split(8, 10)
+  5: Lit(\"b\")
+  6: Jmp(7)
+  7: Save(3)
+  8: Save(4)
  12: Lit(\"c\")
  13: Restore(4)
  14: Backref { slot: 2, casei: false }

@@ -83,7 +83,7 @@ mod tests {
         assert_eq!(requires_capture_group_fixup, true);
         let mut s = String::new();
         optimized_tree.expr.to_str(&mut s, 0);
-        assert_eq!(s, "(?s:.)*?(a)b");
+        assert_eq!(s, "(a)b");
     }
 
     #[test]
@@ -93,7 +93,7 @@ mod tests {
         assert_eq!(requires_capture_group_fixup, true);
         let mut s = String::new();
         optimized_tree.expr.to_str(&mut s, 0);
-        assert_eq!(s, "(?s:.)*?(a)(?:b|c)");
+        assert_eq!(s, "(a)(?:b|c)");
     }
 
     #[test]
@@ -104,12 +104,6 @@ mod tests {
         assert_eq!(
             optimized_tree.expr,
             Expr::Concat(vec![
-                Expr::Repeat {
-                    child: Box::new(Expr::Any { newline: true }),
-                    lo: 0,
-                    hi: usize::MAX,
-                    greedy: false
-                },
                 Expr::Group(Box::new(Expr::Concat(vec![
                     Expr::Group(Box::new(make_literal("a"))),
                     Expr::Backref {

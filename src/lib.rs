@@ -751,7 +751,7 @@ impl Regex {
             if !requires_capture_group_fixup {
                 // same as raw_tree.expr above, but it was moved, so traverse to find it
                 let raw_e = match tree.expr {
-                    Expr::Concat(ref v) => match v[1] {
+                    Expr::Concat(ref v) => match v[0] {
                         Expr::Group(ref child) => child,
                         _ => unreachable!(),
                     },
@@ -759,15 +759,7 @@ impl Regex {
                 };
                 raw_e.to_str(&mut re_cooked, 0);
             } else {
-                match tree.expr {
-                    Expr::Concat(ref v) => {
-                        // skip the `(?s:.)*?` at the beginning of the regex, we don't need it when delegating
-                        for expr in v.iter().skip(1) {
-                            expr.to_str(&mut re_cooked, 2);
-                        }
-                    }
-                    _ => unreachable!(),
-                }
+                tree.expr.to_str(&mut re_cooked, 0);
             };
             let inner = compile::compile_inner(&re_cooked, &options)?;
             return Ok(Regex {
@@ -1946,12 +1938,6 @@ pub fn detect_possible_backref(re: &str) -> bool {
 pub fn wrap_tree(raw_tree: ExprTree) -> ExprTree {
     return ExprTree {
         expr: Expr::Concat(vec![
-            Expr::Repeat {
-                child: Box::new(Expr::Any { newline: true }),
-                lo: 0,
-                hi: usize::MAX,
-                greedy: false,
-            },
             Expr::Group(Box::new(raw_tree.expr)),
         ]),
         ..raw_tree
