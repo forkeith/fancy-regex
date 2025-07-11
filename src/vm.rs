@@ -112,6 +112,8 @@ pub struct Delegate {
     pub start_group: usize,
     /// The last group number
     pub end_group: usize,
+    /// Whether the match should be anchored or not
+    pub anchored: bool,
 }
 
 impl core::fmt::Debug for Delegate {
@@ -122,12 +124,14 @@ impl core::fmt::Debug for Delegate {
             pattern,
             start_group,
             end_group,
+            anchored,
         } = self;
 
         f.debug_struct("Delegate")
             .field("pattern", pattern)
             .field("start_group", start_group)
             .field("end_group", end_group)
+            .field("anchored", anchored)
             .finish()
     }
 }
@@ -742,8 +746,9 @@ pub(crate) fn run(
                     pattern: _,
                     start_group,
                     end_group,
+                    anchored,
                 }) => {
-                    let input = Input::new(s).span(ix..s.len()).anchored(Anchored::Yes);
+                    let input = Input::new(s).span(ix..s.len()).anchored(if anchored { Anchored::Yes } else { Anchored::No });
                     if start_group == end_group {
                         // No groups, so we can use faster methods
                         match inner.search_half(&input) {

@@ -43,12 +43,13 @@ struct VMBuilder {
 impl VMBuilder {
     fn new(max_group: usize) -> VMBuilder {
         VMBuilder {
-            prog: Vec::new(),
+            prog: Vec![Insn::Save(0)],
             n_saves: max_group * 2,
         }
     }
 
     fn build(self) -> Prog {
+        self.prog.add(Insn::Save(1));
         Prog::new(self.prog, self.n_saves)
     }
 
@@ -537,16 +538,18 @@ struct DelegateBuilder {
     const_size: bool,
     start_group: Option<usize>,
     end_group: usize,
+    anchored: bool,
 }
 
 impl DelegateBuilder {
-    fn new() -> Self {
+    fn new(anchored: bool) -> Self {
         Self {
             re: String::new(),
             min_size: 0,
             const_size: true,
             start_group: None,
             end_group: 0,
+            anchored,
         }
     }
 
@@ -586,6 +589,7 @@ impl DelegateBuilder {
             pattern: self.re.clone(),
             start_group,
             end_group,
+            anchored,
         }))
     }
 }
