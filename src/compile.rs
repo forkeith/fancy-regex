@@ -43,13 +43,12 @@ struct VMBuilder {
 impl VMBuilder {
     fn new(max_group: usize) -> VMBuilder {
         VMBuilder {
-            prog: Vec![Insn::Save(0)],
+            prog: Vec::new(),
             n_saves: max_group * 2,
         }
     }
 
     fn build(self) -> Prog {
-        self.prog.add(Insn::Save(1));
         Prog::new(self.prog, self.n_saves)
     }
 
@@ -97,6 +96,7 @@ impl VMBuilder {
 struct Compiler {
     b: VMBuilder,
     options: RegexOptions,
+    first_delegate_emitted: bool,
 }
 
 impl Compiler {
@@ -104,6 +104,7 @@ impl Compiler {
         Compiler {
             b: VMBuilder::new(max_group),
             options: Default::default(),
+            first_delegate_emitted: false,
         }
     }
 
@@ -469,13 +470,15 @@ impl Compiler {
             return Ok(());
         }
 
-        let mut delegate_builder = DelegateBuilder::new();
+        let mut delegate_builder = DelegateBuilder::new(!self.first_delegate_emitted);
         for info in infos {
             delegate_builder.push(info);
         }
         let delegate = delegate_builder.build(&self.options)?;
 
         self.b.add(delegate);
+        self.first_delegate_emitted = true;
+
         Ok(())
     }
 
@@ -485,9 +488,10 @@ impl Compiler {
             info.push_literal(&mut val);
             Insn::Lit(val)
         } else {
-            DelegateBuilder::new().push(info).build(&self.options)?
+            DelegateBuilder::new(!self.first_delegate_emitted).push(info).build(&self.options)?
         };
         self.b.add(insn);
+        self.first_delegate_emitted = true;
         Ok(())
     }
 }
@@ -589,7 +593,7 @@ impl DelegateBuilder {
             pattern: self.re.clone(),
             start_group,
             end_group,
-            anchored,
+            anchored: self.anchored,
         }))
     }
 }
