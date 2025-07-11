@@ -707,11 +707,17 @@ pub(crate) fn run(
                 Insn::Backref { slot, casei } => {
                     let lo = state.get(slot);
                     if lo == usize::MAX {
+                        if option_flags & OPTION_TRACE != 0 {
+                            println!("slot {} not matched", slot);
+                        }
                         // Referenced group hasn't matched, so the backref doesn't match either
                         break 'fail;
                     }
                     let hi = state.get(slot + 1);
                     if hi == usize::MAX {
+                        if option_flags & OPTION_TRACE != 0 {
+                            println!("slot {} not matched", slot + 1);
+                        }
                         // Referenced group hasn't matched, so the backref doesn't match either
                         break 'fail;
                     }
@@ -722,6 +728,9 @@ pub(crate) fn run(
                             break 'fail;
                         }
                     } else if !matches_literal(s, ix, ix_end, ref_text) {
+                        if option_flags & OPTION_TRACE != 0 {
+                            println!("backref literal '{}' not matched at pos {}", ref_text, ix);
+                        }
                         break 'fail;
                     }
                     ix = ix_end;
@@ -749,11 +758,27 @@ pub(crate) fn run(
                     anchored,
                 }) => {
                     let input = Input::new(s).span(ix..s.len()).anchored(if anchored { Anchored::Yes } else { Anchored::No });
-                    if start_group == end_group && anchored {
+                    if start_group == end_group {
                         // No groups, so we can use faster methods
-                        match inner.search_half(&input) {
-                            Some(m) => ix = m.offset(),
-                            _ => break 'fail,
+                        if anchored {
+                            match inner.search_half(&input) {
+                                Some(m) => ix = m.offset(),
+                                _ => break 'fail,
+                            }
+                        } else {
+                            match inner.search(&input) {
+                                Some(m) => {
+                                    ix = m.end();
+                                    for i in 0..end_group {
+                                        let slot = i * 2;
+                                        state.save(slot, m.start());
+                                    }
+                                    if option_flags & OPTION_TRACE != 0 {
+                                        println!("unanchored start/end group: {} new ix: {} new match bounds start: {}", start_group, ix, m.start());
+                                    }
+                                }
+                                _ => break 'fail,
+                            }
                         }
                     } else {
                         inner_slots.resize((end_group - start_group + 1) * 2, None);
@@ -770,7 +795,13 @@ pub(crate) fn run(
                                 }
                             }
                             if !anchored {
-                                state.save(0, inner_slots[0].unwrap().get());
+                                if option_flags & OPTION_TRACE != 0 {
+                                    println!("unanchored start group: {} end group: {} old ix: {} new match bounds start: {}", start_group, end_group, ix, inner_slots[0].unwrap().get());
+                                }
+                                for i in 0..end_group {
+                                    let slot = i * 2;
+                                    state.save(slot, inner_slots[0].unwrap().get());
+                                }
                             }
                             ix = inner_slots[1].unwrap().get();
                         } else {

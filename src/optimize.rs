@@ -47,7 +47,7 @@ fn optimize_trailing_lookahead(tree: &mut ExprTree) -> bool {
 
     // here we traverse the tree to find capture group 0
     // we start with the root concat, and get the last child
-    if let Expr::Concat(ref mut root_concat_children) = tree.expr {
+    /*if let Expr::Concat(ref mut root_concat_children) = tree.expr {
         if let Some(last_child_of_root_concat) = &mut root_concat_children.last_mut() {
             // we get the last child if it is a capture group
             if let Expr::Group(ref mut inner) = last_child_of_root_concat {
@@ -66,7 +66,7 @@ fn optimize_trailing_lookahead(tree: &mut ExprTree) -> bool {
                 }
             }
         }
-    }
+    }*/
     false
 }
 
