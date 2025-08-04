@@ -77,6 +77,8 @@ pub enum CompileError {
     FeatureNotYetSupported(String),
     /// Subroutine call to non-existent group
     SubroutineCallTargetNotFound(String, usize),
+    /// Subroutine call is left-recursive
+    LeftRecursiveSubroutineCall(usize),
 }
 
 /// An error as the result of executing a regex.
@@ -137,6 +139,9 @@ impl fmt::Display for CompileError {
             CompileError::FeatureNotYetSupported(s) => write!(f, "Regex uses currently unimplemented feature: {}", s),
             CompileError::SubroutineCallTargetNotFound(s, ix) => {
                 write!(f, "Subroutine call target not found at position {}: {}", ix, s)
+            }
+            CompileError::LeftRecursiveSubroutineCall(g) => {
+                write!(f, "Subroutine {} is left-recursive", g)
             }
         }
     }

@@ -68,6 +68,9 @@ impl<'a> Info<'a> {
 struct Analyzer<'a> {
     backrefs: &'a BitSet,
     group_ix: usize,
+    inside_groups: BitSet,
+    subroutine_calls: Vec<BitSet>,
+    recursive_subroutines: BitSet,
 }
 
 impl<'a> Analyzer<'a> {
@@ -122,7 +125,10 @@ impl<'a> Analyzer<'a> {
             Expr::Group(ref child) => {
                 let group = self.group_ix;
                 self.group_ix += 1;
+                self.subroutine_calls.push(Default::default());
+                self.inside_groups.insert(group);
                 let child_info = self.visit(child, 0)?;
+                self.inside_groups.remove(group);
                 min_size = child_info.min_size;
                 const_size = child_info.const_size;
                 // If there's a backref to this group, we potentially have to backtrack within the
@@ -200,7 +206,26 @@ impl<'a> Analyzer<'a> {
                 children.push(child_info_truth);
                 children.push(child_info_false);
             }
-            Expr::SubroutineCall(_) => {
+            Expr::SubroutineCall(group) => {
+                // make a note that the current group hierarchy calls this subroutine
+                for inside_group in self.inside_groups.iter() {
+                    self.subroutine_calls[inside_group].insert(group);
+                }
+                // mark which subroutines are recursive
+                if group < self.subroutine_calls.len() {
+                    if let Some(_) = self.subroutine_calls[group]
+                        .intersection(&self.inside_groups)
+                        .next()
+                    {
+                        self.recursive_subroutines.insert(group);
+                        if min_pos_in_group == 0 && group == self.group_ix - 1 {
+                            return Err(Error::CompileError(
+                                CompileError::LeftRecursiveSubroutineCall(group),
+                            ));
+                        }
+                    }
+                }
+
                 return Err(Error::CompileError(CompileError::FeatureNotYetSupported(
                     "Subroutine Call".to_string(),
                 )));
@@ -229,6 +254,93 @@ impl<'a> Analyzer<'a> {
         })
     }
 }
+/*
+TODO: rewrite based on min pos in group, and do in one pass?
+impl SubroutineAnalyzer {
+    fn visit(
+        &mut self,
+        expr: &Expr,
+        mut first_child_of_subroutine: bool,
+        inside_groups: &mut BitSet,
+        ignore_subroutine_calls: bool,
+    ) -> Result<()> {
+        match expr {
+            Expr::Group(ref inner) => {
+                let current_subroutine = self.group_ix;
+                self.group_ix += 1;
+                self.subroutines.insert(current_subroutine, *inner.clone());
+                self.subroutine_calls.push(Default::default());
+                inside_groups.insert(current_subroutine);
+                self.visit(inner, true, inside_groups, false)?;
+                inside_groups.remove(current_subroutine);
+            }
+            // recursively resolve in inner expressions
+            Expr::LookAround(inner, _) | Expr::AtomicGroup(inner) => {
+                self.visit(
+                    inner,
+                    first_child_of_subroutine,
+                    inside_groups,
+                    ignore_subroutine_calls,
+                )?;
+            }
+            Expr::Concat(children) | Expr::Alt(children) => {
+                for child in children {
+                    self.visit(
+                        child,
+                        first_child_of_subroutine,
+                        inside_groups,
+                        ignore_subroutine_calls,
+                    )?;
+                    first_child_of_subroutine = false;
+                }
+            }
+            Expr::Repeat { child, hi, .. } => {
+                self.visit(
+                    child,
+                    first_child_of_subroutine && *hi > 0,
+                    inside_groups,
+                    ignore_subroutine_calls || *hi == 0,
+                )?;
+            }
+            Expr::Conditional {
+                condition,
+                true_branch,
+                false_branch,
+            } => {
+                self.visit(
+                    condition,
+                    first_child_of_subroutine,
+                    inside_groups,
+                    ignore_subroutine_calls,
+                )?;
+                self.visit(true_branch, false, inside_groups, ignore_subroutine_calls)?;
+                self.visit(false_branch, false, inside_groups, ignore_subroutine_calls)?;
+            }
+            Expr::SubroutineCall(group) => {
+                // make a note that the current group hierarchy calls this subroutine
+                for inside_group in inside_groups.iter() {
+                    self.subroutine_calls[inside_group].insert(*group);
+                }
+                // mark which subroutines are recursive
+                if *group < self.subroutine_calls.len() {
+                    if let Some(_) = self.subroutine_calls[*group]
+                        .intersection(inside_groups)
+                        .next()
+                    {
+                        self.recursive_subroutines.insert(*group);
+                        if first_child_of_subroutine && *group == self.group_ix - 1 {
+                            return Err(Error::CompileError(
+                                CompileError::LeftRecursiveSubroutineCall(*group),
+                            ));
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+}*/
 
 fn literal_const_size(_: &str, _: bool) -> bool {
     // Right now, regex doesn't do sophisticated case folding,
@@ -242,7 +354,14 @@ pub fn analyze<'a>(tree: &'a ExprTree, start_group: usize) -> Result<Info<'a>> {
     let mut analyzer = Analyzer {
         backrefs: &tree.backrefs,
         group_ix: start_group,
+        subroutine_calls: Default::default(),
+        inside_groups: BitSet::new(),
+        recursive_subroutines: BitSet::new(),
     };
+
+    for group in 0..start_group {
+        analyzer.subroutine_calls.push(BitSet::new());
+    }
 
     let analyzed = analyzer.visit(&tree.expr, 0);
     if analyzer.backrefs.contains(0) {
@@ -459,6 +578,56 @@ mod tests {
             Some(Error::CompileError(
                 CompileError::SubroutineCallTargetNotFound(_, _)
             ))
+        ));
+    }
+
+    #[test]
+    fn left_recursive_subroutine_call() {
+        let tree = Expr::parse_tree(r"(?<a>\g<a>)").unwrap();
+        let result = analyze(&tree, 1).err();
+        println!("{:?}", result);
+        assert!(matches!(result, Some(Error::CompileError(CompileError::LeftRecursiveSubroutineCall(1)))));
+
+        let tree = Expr::parse_tree(r"(?<a>(?:\g<a>|))").unwrap();
+        let result = analyze(&tree, 1).err();
+        println!("{:?}", result);
+        assert!(matches!(result, Some(Error::CompileError(CompileError::LeftRecursiveSubroutineCall(1)))));
+
+        let tree = Expr::parse_tree(r"(?<name>a|\g<name>b)").unwrap();
+        let result = analyze(&tree, 1).err();
+        println!("{:?}", result);
+        assert!(matches!(result, Some(Error::CompileError(CompileError::LeftRecursiveSubroutineCall(1)))));
+    }
+
+    #[test]
+    fn indirect_left_recursive_subroutine_call() {
+        let tree = Expr::parse_tree(r"(?<a>(?=\g<b>|))(?<b>\g<a>)").unwrap();
+        let result = analyze(&tree, 1).err();
+        println!("{:?}", result);
+        assert!(matches!(result, Some(Error::CompileError(CompileError::LeftRecursiveSubroutineCall(1)))));
+    }
+
+    #[test]
+    fn recursive_subroutine_call_not_yet_supported() {
+        let tree = Expr::parse_tree(r"(a\g<1>)").unwrap();
+        let result = analyze(&tree, 1).err();
+        println!("{:?}", result);
+        //let expected = "Recursive Subroutine Call".to_string();
+        assert!(matches!(
+            result,
+            Some(Error::CompileError(CompileError::FeatureNotYetSupported(_)))
+        ));
+    }
+
+    #[test]
+    fn less_obvious_recursive_subroutine_call_not_yet_supported() {
+        let tree = Expr::parse_tree(r"(?<a>a\g<b>)(?<b>b\g<a>?)").unwrap();
+        let result = analyze(&tree, 1);
+        println!("{:?}", result);
+        //let expected = "Recursive Subroutine Call".to_string();
+        assert!(matches!(
+            result.err(),
+            Some(Error::CompileError(CompileError::FeatureNotYetSupported(_)))
         ));
     }
 
