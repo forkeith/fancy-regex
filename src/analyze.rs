@@ -93,7 +93,8 @@ impl<'a> Analyzer<'a> {
                 const_size = true;
             }
             Expr::Literal { ref val, casei } => {
-                min_size = val.chars().count();
+                // right now each character in a literal gets its own node, that might change
+                min_size = 1;
                 const_size = literal_const_size(val, casei);
             }
             Expr::Concat(ref v) => {
